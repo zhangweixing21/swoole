@@ -20,7 +20,7 @@ return [
             'name' => 'http',
             'type' => Server::SERVER_HTTP,
             'host' => '0.0.0.0',
-            'port' => 9501,
+            'port' => 45105,
             'sock_type' => SWOOLE_SOCK_TCP,
             'callbacks' => [
                 Event::ON_REQUEST => [Hyperf\HttpServer\Server::class, 'onRequest'],
@@ -30,7 +30,7 @@ return [
             'name' => 'tcp',
             'type' => Server::SERVER_BASE,
             'host' => '0.0.0.0',
-            'port' => 9504,
+            'port' => 45104,
             'sock_type' => SWOOLE_SOCK_TCP,
             'callbacks' => [
                 Event::ON_RECEIVE => [App\Controller\TcpServer::class, 'onReceive'],
@@ -41,31 +41,31 @@ return [
                 'package_eof' => "\r\n", // 设置 EOF 字符串
             ],
         ],
-        [
-            'name' => 'jsonrpc-http',
-            'type' => Server::SERVER_HTTP,
-            'host' => '0.0.0.0',
-            'port' => 9604,
-            'sock_type' => SWOOLE_SOCK_TCP,
-            'callbacks' => [
-                Event::ON_REQUEST => [\Hyperf\JsonRpc\HttpServer::class, 'onRequest'],
-            ],
-        ],
-        [
-            'name' => 'jsonrpc',
-            'type' => Server::SERVER_BASE,
-            'host' => '0.0.0.0',
-            'port' => 9503,
-            'sock_type' => SWOOLE_SOCK_TCP,
-            'callbacks' => [
-                Event::ON_RECEIVE => [\Hyperf\JsonRpc\TcpServer::class, 'onReceive'],
-            ],
-            'settings' => [
-                'open_eof_split' => true,
-                'package_eof' => "\r\n",
-                'package_max_length' => 1024 * 1024 * 2,
-            ],
-        ],
+//        [
+//            'name' => 'jsonrpc-http',
+//            'type' => Server::SERVER_HTTP,
+//            'host' => '0.0.0.0',
+//            'port' => 9604,
+//            'sock_type' => SWOOLE_SOCK_TCP,
+//            'callbacks' => [
+//                Event::ON_REQUEST => [\Hyperf\JsonRpc\HttpServer::class, 'onRequest'],
+//            ],
+//        ],
+//        [
+//            'name' => 'jsonrpc',
+//            'type' => Server::SERVER_BASE,
+//            'host' => '0.0.0.0',
+//            'port' => 9503,
+//            'sock_type' => SWOOLE_SOCK_TCP,
+//            'callbacks' => [
+//                Event::ON_RECEIVE => [\Hyperf\JsonRpc\TcpServer::class, 'onReceive'],
+//            ],
+//            'settings' => [
+//                'open_eof_split' => true,
+//                'package_eof' => "\r\n",
+//                'package_max_length' => 1024 * 1024 * 2,
+//            ],
+//        ],
     ],
     'settings' => [
         Constant::OPTION_ENABLE_COROUTINE => true,

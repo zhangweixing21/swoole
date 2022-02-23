@@ -11,7 +11,7 @@ class TcpServer implements OnReceiveInterface
 {
     public function onReceive($server, int $fd, int $reactorId, string $data): void
     {
-
+        var_dump($data);
         $explodeData = explode("\r\n", $data);
         $msg = explode(',', $explodeData[0]);
         $db = ApplicationContext::getContainer()->get(DB::class);
@@ -82,7 +82,7 @@ class TcpServer implements OnReceiveInterface
                 $stunoo = $stu_data['stunoo'];
                 $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
             }
-            var_dump($stu_data);
+
             var_dump($stunoo);
             if (!$stunoo) {
                 var_dump('学生不存在');
@@ -106,80 +106,86 @@ class TcpServer implements OnReceiveInterface
                 return;
             }
             //是否是进出围栏数据
-            $this->enclosure($stunoo,$lon,$lat,$address,$pow);
+            $this->enclosure($stunoo,$lon,$lat,$address,$pow,$server,$fd);
         }
         $server->send($fd, 'recv:' . implode(',',$msg));
     }
 
-    public function enclosure($stunoo,$lon,$lat,$address,$pow){
+    /**
+     * 围栏数据
+     * @param $stunoo
+     * @param $lon
+     * @param $lat
+     * @param $address
+     * @param $pow
+     * @param $server
+     * @param $fd
+     * @throws \Psr\Container\ContainerExceptionInterface
+     * @throws \Psr\Container\NotFoundExceptionInterface
+     */
+    public function enclosure($stunoo,$lon,$lat,$address,$pow,$server,$fd){
         $container = ApplicationContext::getContainer();
         $redis = $container->get(\Hyperf\Redis\Redis::class);
         $db = ApplicationContext::getContainer()->get(DB::class);
+        $enclosure_data = $db->query('SELECT id,accuracy,dimension,name,distance,is_enter,is_out FROM `enclosure`WHERE stunoo = ?;', [$stunoo]);
         //获取围栏
-        $enclosure_data = $redis->get($stunoo);
-        if (!$enclosure_data) {
-            $enclosure_data = $db->query('SELECT id,accuracy,dimension,name,distance,is_enter,is_out FROM `enclosure`WHERE stunoo = ?;', [$stunoo]);
-            $enclosure_data = json_encode($enclosure_data);
-            $redis->setex($stunoo, 60 * 60 * 24, $enclosure_data);
-            var_dump('获取围栏1');
-        }
-        $enclosure_data_2 = json_decode($enclosure_data, true);
+        if ($enclosure_data) {
+            var_dump('有围栏');
 
-        if (!empty($enclosure_data_2)) {
-            var_dump('获取围栏');
-
-            $distance = [];
-
-            //判断最小距离
-            foreach ($enclosure_data_2 as $k => $v) {
-                //计算两点地理坐标之间的距离
-                $is_true = $this->getDistance($lon, $lat, $v['accuracy'], $v['dimension'], 1);
-                $distance[] = ['id' => $v['id'], 'distance' => $is_true];
-            }
-            var_dump($distance);
-            //获取最小值
-            $min = $this->phpMaxMin($distance, 'distance');
-
-            var_dump('最小值:  ');
-            var_dump($min);
-            //修改发送间隔
-            $hours = getdate()['hours'];
+            $is_enter = [];
             $is_ent_out = '';
             $is_send = 0;
-
-            foreach ($enclosure_data_2 as $k => $v) {
-                //计算两点地理坐标之间的距离
-                $is_true2 = $this->getDistance($lon, $lat, $v['accuracy'], $v['dimension'], 1);
-                var_dump($is_true2);
-                if ($v['id'] == $min['key']) {
-                    //出
-                    if ($is_true2 > $v['distance'] && $v['is_out'] == 0) {
-                        var_dump($v['name'] . '     出');
-                        $student_end[$k]['is_enter'] = 0;
-                        $student_end[$k]['is_out'] = 1;
-                        $is_ent_out = '出';
-                        $is_send = 1;
-                    }
-                    //进
-                    if ($is_true2 < $v['distance'] && $v['is_enter'] == 0) {
-                        var_dump($v['name'] . '     进');
-                        $student_end[$k]['is_out'] = 0;
-                        $student_end[$k]['is_enter'] = 1;
-                        $is_ent_out = '进';
-                        $is_send = 1;
+            $convert = new \Convert();
+            foreach ($enclosure_data as $k => $v){
+                $point = [ 'lng' => $lon, 'lat' => $lat];
+                $circle = [
+                    'center' => [ 'lng' => $v['accuracy'], 'lat' => $v['dimension'] ],
+                    'radius' => $v['distance']
+                ];
+                //判断是否进出围栏,true 围栏内  false 围栏外
+                $bool = $convert ->is_point_in_circle($point,$circle);
+                if ($bool){
+                    var_dump('进围栏');
+                    $is_enter = $redis->get($stunoo);
+                    if ($is_enter){
+                        $is_enter = json_decode($is_enter, true);
+                        $is_send = $is_enter['is_send_number'] ? 0 : 1;
                     }
 
-                    //修改发送间隔
-                    if (($is_true2 < $v['distance']) || ($hours >= 0 && $hours <= 6)) {
-                        var_dump('修改发送间隔:   ');
+                    $is_enter['id'] = $v['id'];
+                    $is_enter['is_enter_out'] = 1; //0出  1进
+                    $is_enter['is_send_number'] = 1; //是否已发送进出数据
+                    $is_enter['enclosure_name'] = $v['name'];
+                    $is_ent_out = '进';
 
-//                                $serv->send($fd, 'ZF260');
-                    }
+                    $redis->setex($stunoo, 60 * 60 * 24, json_encode($is_enter));
+
                     //围栏数据
                     $this->insertdata($stunoo, $is_ent_out . $v['name'], $is_send, 0, $address, $pow, $lon, $lat);
+                }else{
+                    var_dump('出围栏');
+                    $is_enter = $redis->get($stunoo);
+
+                    if ($is_enter){
+                        $is_enter = json_decode($is_enter, true);
+                        if ($is_enter){
+                            $is_enter = json_decode($is_enter, true);
+                            $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                        }
+                        $is_ent_out = '出';
+                        //围栏数据
+                        $this->insertdata($stunoo, $is_ent_out . $is_enter['enclosure_name'], $is_send, 0, $address, $pow, $lon, $lat);
+
+                        $is_enter['id'] = $v['id'];
+                        $is_enter['is_enter_out'] = 0; //0出  1进
+                        $is_enter['is_send_number'] = 1; //是否已发送进出数据
+                        $is_enter['enclosure_name'] = $v['name'];
+                        $redis->setex($stunoo, 60 * 60 * 24, json_encode($is_enter));
+                    }
                 }
+
             }
-            $redis->setex($stunoo, 60 * 60 * 24, json_encode($student_end));
+
         } else {
             //普通数据
             var_dump('没有围栏');
@@ -410,7 +416,7 @@ class TcpServer implements OnReceiveInterface
      */
     public function getLocationWhite($stunoo){
         $db = ApplicationContext::getContainer()->get(DB::class);
-        $location_white = $db->query('SELECT * FROM location_white WHERE stunoo = ?;', [$stunoo]);
+        $location_white = $db->fetch('SELECT * FROM location_white WHERE stunoo = ?;', [$stunoo]);
 
         $white = '';
         $str = '';

@@ -55,7 +55,8 @@
             "App\\": "app/"
         },
         "files": [
-            "app/Helpers/PushData.php"
+            "app/Helpers/PushData.php",
+            "app/Helpers/Convert.php"
         ]
     },
     "autoload-dev": {

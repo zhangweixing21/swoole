@@ -25,7 +25,6 @@ class PushData{
 
     static function getUrl() {
         $access_token = self::getAccessToken();
-        dump($access_token);
         $url = self::$COM_MB_RUL . $access_token;
         return $url;
     }
@@ -106,7 +105,7 @@ class PushData{
         curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-        curl_setopt($curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
+//        curl_setopt($curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
         $result = curl_exec($curl);
         if (curl_errno($curl)) {
             return array("errcode" => -1, "errmsg" => '发送错误号' . curl_errno($curl) . '错误信息' . curl_error($curl));
