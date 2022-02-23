@@ -102,6 +102,8 @@ class TcpServer implements OnReceiveInterface
                 $latlon = $address_data['result']['location'];
                 $lon = explode(',', $latlon)[0];
                 $lat = explode(',', $latlon)[1];
+//                $lon = '113.717947';
+//                $lat = '34.801657';
                 var_dump($lat);
                 var_dump($lon);
                 $address = preg_replace('# #', '', $address_data['result']['desc']);
@@ -155,10 +157,16 @@ class TcpServer implements OnReceiveInterface
                 if ($bool) {
                     var_dump('进围栏');
                     $is_enter = $redis->get($stunoo);
-                    if ($is_enter) {
+                    if ($is_enter){
                         $is_enter = json_decode($is_enter, true);
-                        $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                        if ($is_enter && $is_enter['is_enter_out'] == 1) {
+                            var_dump($is_enter);
+                            $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                        }else{
+                            $is_send = 1;
+                        }
                     }
+
 
                     $is_enter['id'] = $v['id'];
                     $is_enter['is_enter_out'] = 1; //0出  1进
@@ -176,20 +184,20 @@ class TcpServer implements OnReceiveInterface
 
                     if ($is_enter) {
                         $is_enter = json_decode($is_enter, true);
-                        if ($is_enter) {
-                            $is_enter = json_decode($is_enter, true);
+                        if ($is_enter && $is_enter['is_enter_out'] == 0) {
                             $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                        }else{
+                            $is_send = 1;
                         }
-                        $is_ent_out = '出';
-                        //围栏数据
-                        $this->insertdata($stunoo, $is_ent_out . $is_enter['enclosure_name'], $is_send, 0, $address, $pow, $lon, $lat);
-
-                        $is_enter['id'] = $v['id'];
-                        $is_enter['is_enter_out'] = 0; //0出  1进
-                        $is_enter['is_send_number'] = 1; //是否已发送进出数据
-                        $is_enter['enclosure_name'] = $v['name'];
-                        $redis->setex($stunoo, 60 * 60 * 24, json_encode($is_enter));
                     }
+                    //围栏数据
+                    $this->insertdata($stunoo, $is_ent_out . $is_enter['enclosure_name'], $is_send, 0, $address, $pow, $lon, $lat);
+                    $is_ent_out = '出';
+                    $is_enter['id'] = $v['id'];
+                    $is_enter['is_enter_out'] = 0; //0出  1进
+                    $is_enter['is_send_number'] = 1; //是否已发送进出数据
+                    $is_enter['enclosure_name'] = $v['name'];
+                    $redis->setex($stunoo, 60 * 60 * 24, json_encode($is_enter));
                 }
 
             }
@@ -217,6 +225,7 @@ class TcpServer implements OnReceiveInterface
      */
     public function insertdata($stunoo, $name, $is_send, $is_po, $address, $pow, $lon, $lat)
     {
+        var_dump($name);
         if ($stunoo) {
             if ($lon && $lat) {
 
