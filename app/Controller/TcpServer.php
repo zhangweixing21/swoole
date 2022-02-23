@@ -11,104 +11,111 @@ class TcpServer implements OnReceiveInterface
 {
     public function onReceive($server, int $fd, int $reactorId, string $data): void
     {
-        var_dump($data);
-        $explodeData = explode("\r\n", $data);
-        $msg = explode(',', $explodeData[0]);
-        $db = ApplicationContext::getContainer()->get(DB::class);
-        $student_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$msg[2]]);
+        if (is_array(json_decode($data, true))) {
+            $msg = json_decode(explode("\r\n", $data)[0], true);
 
-        if (count($msg) == 3) {
-            //心跳
-            if ($msg[1] == 6) {
-                $server->send($fd, 'ZF');
-                return;
-            }
-            //注册
-            if ($msg[1] == 7) {
-                $str = '';
-                //获取亲情号和上传间隔
-                $str .= $this->getQingQinTel($msg[2]);
-                //获取免打扰时间
-                $str .= $this->getDisturbTime($msg[2]);
-                //获取电话白名单
-                $str .= $this->getLocationWhite($student_data['stunoo']);
-
-                $server->send($fd, $str);
-                return;
-            }
-
-        }else{
-//            if (count($msg) != 8) {
-//                return;
-//            }
-            //定位时间段设置
-//            $is_location = 0;
+            var_dump($msg);
+            $server->send($msg['fd'], $msg['zf']);
+        } else {
+            var_dump($data);
+            $explodeData = explode("\r\n", $data);
+            $msg = explode(',', $explodeData[0]);
             $db = ApplicationContext::getContainer()->get(DB::class);
-//            $location_locreport = $db->query('SELECT start_time,end_time FROM `location_locreport`WHERE stunoo = ?;', [$student_data['stunoo']]);
-//            if ($location_locreport){
-//                foreach ($location_locreport as $k => $v) {
-//                    $start = strtotime(date('Y-m-d', time()) . ' ' . $v['start_time']);
-//                    $end = strtotime(date('Y-m-d', time()) . ' ' . $v['end_time']);
-//                    if (time() > $start && time() < $end) {
-//                        $is_location = 1;
-//                    }
-//                }
-//                if ($is_location = 0) {
-//                    return;
-//                }
-//            }
-            $location_id = $msg[2];
-            var_dump($location_id);
-            $container = ApplicationContext::getContainer();
-            $redis = $container->get(\Hyperf\Redis\Redis::class);
+            $student_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$msg[2]]);
+            if (count($msg) == 3) {
+                //心跳
+                if ($msg[1] == 6) {
+                    $server->send($fd, 'ZF');
+                    return;
+                }
+                //注册
+                if ($msg[1] == 7) {
+                    $str = '';
+                    //获取亲情号和上传间隔
+                    $str .= $this->getQingQinTel($msg[2]);
+                    //获取免打扰时间
+                    $str .= $this->getDisturbTime($msg[2]);
+                    //获取电话白名单
+                    $str .= $this->getLocationWhite($student_data['stunoo']);
 
-            $redis_student = $redis->get($location_id);
-            $redis->del($location_id);
-            if ($redis_student) {
-                $redis_student = json_decode($redis_student, true);
-                $stunoo = $redis_student['stunoo'];
-                if (!$stunoo) {
-                    $stu_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$location_id]);
-                    $stunoo = $stu_data['stunoo'];
+                    $server->send($fd, $str);
+                    return;
                 }
 
-                if ($redis_student['fd'] != $fd) {
+            } else {
+                if (count($msg) != 8) {
+                    return;
+                }
+                //定位时间段设置
+                $is_location = 0;
+                $db = ApplicationContext::getContainer()->get(DB::class);
+                $location_locreport = $db->query('SELECT start_time,end_time FROM `location_locreport`WHERE stunoo = ?;', [$student_data['stunoo']]);
+                if ($location_locreport) {
+                    foreach ($location_locreport as $k => $v) {
+                        $start = strtotime(date('Y-m-d', time()) . ' ' . $v['start_time']);
+                        $end = strtotime(date('Y-m-d', time()) . ' ' . $v['end_time']);
+                        if (time() > $start && time() < $end) {
+                            $is_location = 1;
+                        }
+                    }
+                    if ($is_location = 0) {
+                        return;
+                    }
+                }
+                $location_id = $msg[2];
+                var_dump($location_id);
+                $container = ApplicationContext::getContainer();
+                $redis = $container->get(\Hyperf\Redis\Redis::class);
+
+                $redis_student = $redis->get($location_id);
+                $redis->del($location_id);
+                if ($redis_student) {
+                    $redis_student = json_decode($redis_student, true);
+                    $stunoo = $redis_student['stunoo'];
+                    if (!$stunoo) {
+                        $stu_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$location_id]);
+                        $stunoo = $stu_data['stunoo'];
+                    }
+
+                    if ($redis_student['fd'] != $fd) {
+                        $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
+                    }
+
+                } else {
+                    $stu_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$location_id]);
+
+                    $stunoo = $stu_data['stunoo'];
                     $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
                 }
 
-            }else{
-                $stu_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$location_id]);
-
-                $stunoo = $stu_data['stunoo'];
-                $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
+                var_dump($stunoo);
+                if (!$stunoo) {
+                    var_dump('学生不存在');
+                    return;
+                }
+                $pow = hexdec(bin2hex($msg[3]));
+                //获取位置
+                $address_data = $this->getAddress($msg[4], $msg[5], $location_id, $msg[6]);
+                if ($address_data['result']['type'] == 0) {
+                    return;
+                }
+                $latlon = $address_data['result']['location'];
+                $lon = explode(',', $latlon)[0];
+                $lat = explode(',', $latlon)[1];
+                var_dump($lat);
+                var_dump($lon);
+                $address = preg_replace('# #', '', $address_data['result']['desc']);
+                if ($msg[7] == 1) {
+                    //报警数据
+                    $this->insertdata($stunoo, '', 1, 1, $address, $pow, $lon, $lat);
+                    return;
+                }
+                //是否是进出围栏数据
+                $this->enclosure($stunoo, $lon, $lat, $address, $pow, $server, $fd);
             }
-
-            var_dump($stunoo);
-            if (!$stunoo) {
-                var_dump('学生不存在');
-                return;
-            }
-            $pow = hexdec(bin2hex($msg[3]));
-            //获取位置
-            $address_data = $this->getAddress($msg[4],$msg[5],$location_id,$msg[6]);
-            if ($address_data['result']['type'] == 0) {
-                return;
-            }
-            $latlon = $address_data['result']['location'];
-            $lon = explode(',', $latlon)[0];
-            $lat = explode(',', $latlon)[1];
-            var_dump($lat);
-            var_dump($lon);
-            $address = preg_replace('# #', '', $address_data['result']['desc']);
-            if ($msg[7] == 1) {
-                //报警数据
-                $this->insertdata($stunoo, '', 1, 1, $address, $pow, $lon, $lat);
-                return;
-            }
-            //是否是进出围栏数据
-            $this->enclosure($stunoo,$lon,$lat,$address,$pow,$server,$fd);
         }
-        $server->send($fd, 'recv:' . implode(',',$msg));
+
+        $server->send($fd, 'recv:' . implode(',', $msg));
     }
 
     /**
@@ -123,7 +130,8 @@ class TcpServer implements OnReceiveInterface
      * @throws \Psr\Container\ContainerExceptionInterface
      * @throws \Psr\Container\NotFoundExceptionInterface
      */
-    public function enclosure($stunoo,$lon,$lat,$address,$pow,$server,$fd){
+    public function enclosure($stunoo, $lon, $lat, $address, $pow, $server, $fd)
+    {
         $container = ApplicationContext::getContainer();
         $redis = $container->get(\Hyperf\Redis\Redis::class);
         $db = ApplicationContext::getContainer()->get(DB::class);
@@ -136,18 +144,18 @@ class TcpServer implements OnReceiveInterface
             $is_ent_out = '';
             $is_send = 0;
             $convert = new \Convert();
-            foreach ($enclosure_data as $k => $v){
-                $point = [ 'lng' => $lon, 'lat' => $lat];
+            foreach ($enclosure_data as $k => $v) {
+                $point = ['lng' => $lon, 'lat' => $lat];
                 $circle = [
-                    'center' => [ 'lng' => $v['accuracy'], 'lat' => $v['dimension'] ],
+                    'center' => ['lng' => $v['accuracy'], 'lat' => $v['dimension']],
                     'radius' => $v['distance']
                 ];
                 //判断是否进出围栏,true 围栏内  false 围栏外
-                $bool = $convert ->is_point_in_circle($point,$circle);
-                if ($bool){
+                $bool = $convert->is_point_in_circle($point, $circle);
+                if ($bool) {
                     var_dump('进围栏');
                     $is_enter = $redis->get($stunoo);
-                    if ($is_enter){
+                    if ($is_enter) {
                         $is_enter = json_decode($is_enter, true);
                         $is_send = $is_enter['is_send_number'] ? 0 : 1;
                     }
@@ -162,13 +170,13 @@ class TcpServer implements OnReceiveInterface
 
                     //围栏数据
                     $this->insertdata($stunoo, $is_ent_out . $v['name'], $is_send, 0, $address, $pow, $lon, $lat);
-                }else{
+                } else {
                     var_dump('出围栏');
                     $is_enter = $redis->get($stunoo);
 
-                    if ($is_enter){
+                    if ($is_enter) {
                         $is_enter = json_decode($is_enter, true);
-                        if ($is_enter){
+                        if ($is_enter) {
                             $is_enter = json_decode($is_enter, true);
                             $is_send = $is_enter['is_send_number'] ? 0 : 1;
                         }
@@ -213,12 +221,12 @@ class TcpServer implements OnReceiveInterface
             if ($lon && $lat) {
 
                 $db = ApplicationContext::getContainer()->get(DB::class);
-                $id = $db->insert('Insert INTO `location_data` SET stunoo = ?,en_name = ?,accuracy = ?,dimension = ?,power = ?,is_police = ?,address = ?,is_gps = ?,is_base = ?,created_at = ?,updated_at = ?;', [$stunoo,$name,$lon,$lat,$pow,$is_po,$address,0,1,time(),time()]);
+                $id = $db->insert('Insert INTO `location_data` SET stunoo = ?,en_name = ?,accuracy = ?,dimension = ?,power = ?,is_police = ?,address = ?,is_gps = ?,is_base = ?,created_at = ?,updated_at = ?;', [$stunoo, $name, $lon, $lat, $pow, $is_po, $address, 0, 1, time(), time()]);
 
                 if ($is_send == 1) {
                     var_dump('推送数据');
                     $student_data = $db->fetch('SELECT stuname FROM `student`WHERE stunoo = ?;', [$stunoo]);
-                    if ($student_data){
+                    if ($student_data) {
                         // no  0围栏  1报警
                         $this->sendMsg($is_po, $stunoo, $student_data['stuname'], $lon, $lat, $id, $address);
                     }
@@ -276,7 +284,8 @@ class TcpServer implements OnReceiveInterface
      * @param $signal
      * @return mixed
      */
-    public function getAddress($lon,$lat,$location_id,$signal){
+    public function getAddress($lon, $lat, $location_id, $signal)
+    {
         //获取位置
         $lon = hexdec($lon);
         $lat = hexdec($lat);
@@ -321,7 +330,8 @@ class TcpServer implements OnReceiveInterface
      * @throws \Psr\Container\ContainerExceptionInterface
      * @throws \Psr\Container\NotFoundExceptionInterface
      */
-    public function getQingQinTel($location_id){
+    public function getQingQinTel($location_id)
+    {
 
         $db = ApplicationContext::getContainer()->get(DB::class);
         $tel_data = $db->query('SELECT b.name_type,b.tel FROM student as a left join qq_tel as b on a.stunoo = b.stunoo WHERE a.location_id = ?;', [$location_id]);
@@ -364,7 +374,8 @@ class TcpServer implements OnReceiveInterface
      * @throws \Psr\Container\ContainerExceptionInterface
      * @throws \Psr\Container\NotFoundExceptionInterface
      */
-    public function getDisturbTime($location_id){
+    public function getDisturbTime($location_id)
+    {
         $db = ApplicationContext::getContainer()->get(DB::class);
         $disturb_time = $db->query('SELECT b.start_time,b.end_time,b.is_open FROM student as a left join open_location_tel as b on a.stunoo = b.stunoo WHERE a.location_id = ?;', [$location_id]);
         $str = '';
@@ -414,7 +425,8 @@ class TcpServer implements OnReceiveInterface
      * @throws \Psr\Container\ContainerExceptionInterface
      * @throws \Psr\Container\NotFoundExceptionInterface
      */
-    public function getLocationWhite($stunoo){
+    public function getLocationWhite($stunoo)
+    {
         $db = ApplicationContext::getContainer()->get(DB::class);
         $location_white = $db->fetch('SELECT * FROM location_white WHERE stunoo = ?;', [$stunoo]);
 
