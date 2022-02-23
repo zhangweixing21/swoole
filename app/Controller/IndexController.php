@@ -32,12 +32,12 @@ class IndexController extends AbstractController
 //        $client = ApplicationContext::getContainer()->get(CalculatorService::class);
 //        $value = $client->add(10, 20);
 //        return $value;
-
-        $client = new \Swoole\Client(SWOOLE_SOCK_TCP);
-        $client->connect('127.0.0.1', 9504);
-        $client->send('ZF,6,867959034543669,0'."\r\n");
-        $ret = $client->recv(); // recv:Hello World.
-        var_dump($ret);
+//
+//        $client = new \Swoole\Client(SWOOLE_SOCK_TCP);
+//        $client->connect('127.0.0.1', 9504);
+//        $client->send('ZF,6,867959034543669,0'."\r\n");
+//        $ret = $client->recv(); // recv:Hello World.
+//        var_dump($ret);
         return $ret;
     }
 

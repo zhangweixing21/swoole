@@ -9,14 +9,25 @@ use Hyperf\DB\DB;
 
 class TcpServer implements OnReceiveInterface
 {
+    /**
+     * 监听消息
+     * @param \Swoole\Coroutine\Server\Connection|\Swoole\Server $server
+     * @param int $fd
+     * @param int $reactorId
+     * @param string $data
+     * @throws \Psr\Container\ContainerExceptionInterface
+     * @throws \Psr\Container\NotFoundExceptionInterface
+     */
     public function onReceive($server, int $fd, int $reactorId, string $data): void
     {
         if (is_array(json_decode($data, true))) {
+            //下发用户配置信息
             $msg = json_decode(explode("\r\n", $data)[0], true);
 
             var_dump($msg);
             $server->send($msg['fd'], $msg['zf']);
         } else {
+            //获取定位信息
             var_dump($data);
             $explodeData = explode("\r\n", $data);
             $msg = explode(',', $explodeData[0]);
@@ -145,6 +156,7 @@ class TcpServer implements OnReceiveInterface
             $is_enter = [];
             $is_ent_out = '';
             $is_send = 0;
+            $enclosure_name = '';
             $convert = new \Convert();
             foreach ($enclosure_data as $k => $v) {
                 $point = ['lng' => $lon, 'lat' => $lat];
@@ -162,8 +174,11 @@ class TcpServer implements OnReceiveInterface
                         if ($is_enter && $is_enter['is_enter_out'] == 1) {
                             var_dump($is_enter);
                             $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                            $enclosure_name = '';
                         }else{
+                            $is_ent_out = '进';
                             $is_send = 1;
+                            $enclosure_name = $v['name'];
                         }
                     }
 
@@ -172,12 +187,12 @@ class TcpServer implements OnReceiveInterface
                     $is_enter['is_enter_out'] = 1; //0出  1进
                     $is_enter['is_send_number'] = 1; //是否已发送进出数据
                     $is_enter['enclosure_name'] = $v['name'];
-                    $is_ent_out = '进';
+
 
                     $redis->setex($stunoo, 60 * 60 * 24, json_encode($is_enter));
 
                     //围栏数据
-                    $this->insertdata($stunoo, $is_ent_out . $v['name'], $is_send, 0, $address, $pow, $lon, $lat);
+                    $this->insertdata($stunoo, $is_ent_out . $enclosure_name, $is_send, 0, $address, $pow, $lon, $lat);
                 } else {
                     var_dump('出围栏');
                     $is_enter = $redis->get($stunoo);
@@ -186,13 +201,16 @@ class TcpServer implements OnReceiveInterface
                         $is_enter = json_decode($is_enter, true);
                         if ($is_enter && $is_enter['is_enter_out'] == 0) {
                             $is_send = $is_enter['is_send_number'] ? 0 : 1;
+                            $enclosure_name = '';
                         }else{
+                            $is_ent_out = '出';
                             $is_send = 1;
+                            $enclosure_name = $v['name'];
                         }
                     }
                     //围栏数据
-                    $this->insertdata($stunoo, $is_ent_out . $is_enter['enclosure_name'], $is_send, 0, $address, $pow, $lon, $lat);
-                    $is_ent_out = '出';
+                    $this->insertdata($stunoo, $is_ent_out . $enclosure_name, $is_send, 0, $address, $pow, $lon, $lat);
+
                     $is_enter['id'] = $v['id'];
                     $is_enter['is_enter_out'] = 0; //0出  1进
                     $is_enter['is_send_number'] = 1; //是否已发送进出数据
