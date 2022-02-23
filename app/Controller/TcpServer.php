@@ -264,7 +264,7 @@ class TcpServer implements OnReceiveInterface
                     var_dump($result);
                 }
             }
-            $id = $db->insert('Insert INTO `system_message` SET school_id = ?,stunoo = ?,title = ?,content = ?,created_at = ?,updated_at = ?,created_at = ?,updated_at = ?;', ['10000', $stunoo, '危险警告', $remark, $time, $time]);
+            $id = $db->insert('Insert INTO `system_message` SET school_id = ?,stunoo = ?,title = ?,content = ?,created_at = ?,updated_at = ?,;', ['10000', $stunoo, '危险警告', $remark, $time, $time]);
         }
     }
 
