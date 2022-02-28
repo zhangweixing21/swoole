@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Helpers\Log;
 use Hyperf\Contract\OnReceiveInterface;
 use Hyperf\Utils\ApplicationContext;
 use Hyperf\DB\DB;
@@ -31,8 +32,13 @@ class TcpServer implements OnReceiveInterface
             var_dump($data);
             $explodeData = explode("\r\n", $data);
             $msg = explode(',', $explodeData[0]);
+            Log::get('app')->info(json_encode($msg));
             $db = ApplicationContext::getContainer()->get(DB::class);
             $student_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$msg[2]]);
+            var_dump($student_data);
+            if(!$student_data){
+                return;
+            }
             if (count($msg) == 3) {
                 //心跳
                 if ($msg[1] == 6) {
@@ -79,7 +85,7 @@ class TcpServer implements OnReceiveInterface
                 $redis = $container->get(\Hyperf\Redis\Redis::class);
 
                 $redis_student = $redis->get($location_id);
-                $redis->del($location_id);
+
                 if ($redis_student) {
                     $redis_student = json_decode($redis_student, true);
                     $stunoo = $redis_student['stunoo'];
@@ -89,14 +95,14 @@ class TcpServer implements OnReceiveInterface
                     }
 
                     if ($redis_student['fd'] != $fd) {
-                        $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
+                        $redis->setex($location_id, 60 * 30, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
                     }
 
                 } else {
                     $stu_data = $db->fetch('SELECT stunoo FROM `student`WHERE location_id = ?;', [$location_id]);
 
                     $stunoo = $stu_data['stunoo'];
-                    $redis->setex($location_id, 60 * 5, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
+                    $redis->setex($location_id, 60 * 30, json_encode(['fd' => $fd, 'stunoo' => $stunoo]));
                 }
 
                 var_dump($stunoo);

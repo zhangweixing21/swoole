@@ -39,6 +39,8 @@ return [
                 // 按需配置
                 'open_eof_split' => true, // 启用 EOF 自动分包
                 'package_eof' => "\r\n", // 设置 EOF 字符串
+                'heartbeat_check_interval' => 600,//秒
+                'heartbeat_idle_time' => 1500,
             ],
         ],
 //        [
@@ -68,6 +70,7 @@ return [
 //        ],
     ],
     'settings' => [
+        'daemonize' => false, //后台作为守护进程
         Constant::OPTION_ENABLE_COROUTINE => true,
         Constant::OPTION_WORKER_NUM => swoole_cpu_num(),
         Constant::OPTION_PID_FILE => BASE_PATH . '/runtime/hyperf.pid',
