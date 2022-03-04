@@ -43,6 +43,23 @@ return [
                 'heartbeat_idle_time' => 1500,
             ],
         ],
+        [
+            'name' => 'tcp',
+            'type' => Server::SERVER_BASE,
+            'host' => '0.0.0.0',
+            'port' => 45106,
+            'sock_type' => SWOOLE_SOCK_TCP,
+            'callbacks' => [
+                Event::ON_RECEIVE => [App\Controller\TcpServer::class, 'onReceive'],
+            ],
+            'settings' => [
+                // 按需配置
+                'open_eof_split' => true, // 启用 EOF 自动分包
+                'package_eof' => "\r\n", // 设置 EOF 字符串
+                'heartbeat_check_interval' => 600,//秒
+                'heartbeat_idle_time' => 1500,
+            ],
+        ],
 //        [
 //            'name' => 'jsonrpc-http',
 //            'type' => Server::SERVER_HTTP,
