@@ -153,6 +153,52 @@ class TcpServer implements OnReceiveInterface
             $this->getStunooAbinet($devid,$stunoo,$phone,$server,$fd,$redis,$db);
             return;
         }
+        //用亲情号和学生信息获取所属柜号
+        if ($func == '15'){
+            $grade = $msg['grade'];   //年级
+            $class = $msg['class'];   //班级
+            $name = $msg['name'];   //姓名
+            $phone = $msg['phone'];   //亲情号
+
+            $this->getqsStunooAbinet($devid,$grade,$class,$name,$phone,$server,$fd,$redis,$db);
+            return;
+        }
+        //服务器通知中转柜显示使用柜子的学生列表，走马灯高亮显示
+        if ($func == '16'){
+            $this->getzzStunooAbinet($devid,$server,$fd,$redis,$db);
+            return;
+        }
+        //用亲情号和学号挂失所属卡
+        if ($func == '17'){
+            $stuno = $msg['stuno'];
+            $phone = $msg['phone'];
+            $this->getReportCard($devid,$stuno,$phone,$server,$fd,$redis,$db);
+            return;
+        }
+        //用亲情号和学生信息挂失所属卡
+        if ($func == '18'){
+            $grade = $msg['grade'];
+            $class = $msg['class'];
+            $name = $msg['name'];
+            $phone = $msg['phone'];
+            $this->getStudentReportCard($devid,$grade,$class,$name,$phone,$server,$fd,$redis,$db);
+            return;
+        }
+        //解挂卡号
+        if ($func == '19'){
+            $no = $msg['No'];
+            $this->getOpenReportCard($devid,$no,$server,$fd,$redis,$db);
+            return;
+        }
+        //管理卡设置柜子信息
+        if ($func == '20'){
+            $no = $msg['No'];
+            $key = $msg['key'];
+            $mode = $msg['mode'];
+            $this->getCabinetSetting($devid,$no,$key,$mode,$server,$fd,$redis,$db);
+            return;
+        }
+
 
 
         $server->send($fd, 'recv:' . implode(',', $msg));
@@ -227,8 +273,8 @@ class TcpServer implements OnReceiveInterface
     /**
      * 开锁
      * @param $devid
-     * @param $id
-     * @param $no
+     * @param $id 柜号
+     * @param $no 6位寄存码
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -257,7 +303,7 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 获取学生信息
-     * @param $no
+     * @param $no 学号
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -305,7 +351,7 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 获取班级列表
-     * @param $grade
+     * @param $grade 年级
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -331,9 +377,9 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 获取学生列表
-     * @param $grade
-     * @param $class
-     * @param $page
+     * @param $grade 年级
+     * @param $class 班级
+     * @param $page  页码
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -362,9 +408,9 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 选中学生后开锁
-     * @param $devid
-     * @param $id
-     * @param $No
+     * @param $devid 设备编号
+     * @param $id 柜号
+     * @param $No 学号
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -388,12 +434,14 @@ class TcpServer implements OnReceiveInterface
             }else{
                 $server->send($fd, json_decode(['func' => '11','id' => $id]));
                 $free_abinet[$id]['is_free'] = 2;
+                $free_abinet[$id]['stunoo'] = $No;
             }
 
             $new_list = json_encode($free_abinet);
             $redis->setex($devid, 60 * 5, json_encode(['fd' => $fd, 'free_abinet' => $new_list]));
         }
 
+        //学生所有柜子列表
         $student_abinet = $redis->get($No);
         if ($student_abinet){
             $student_abinet = json_decode($student_abinet,true);
@@ -408,7 +456,7 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 刷卡后获取所属柜号
-     * @param $id
+     * @param $id 卡号
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -435,8 +483,8 @@ class TcpServer implements OnReceiveInterface
     /**
      * 刷卡后选取柜号用卡号开锁
      * @param $devid
-     * @param $id
-     * @param $no
+     * @param $id 柜号
+     * @param $no 卡号
      * @param $server
      * @param $fd
      * @throws \Psr\Container\ContainerExceptionInterface
@@ -454,6 +502,7 @@ class TcpServer implements OnReceiveInterface
                 //执行开锁
                 $server->send($fd, json_decode(['func' => '13','id' => $id]));
                 $free_abinet[$id]['is_free'] = 1;
+                $free_abinet[$id]['stunoo'] = '';
                 return;
             }else{
 
@@ -481,9 +530,9 @@ class TcpServer implements OnReceiveInterface
 
     /**
      * 用亲情号和学号获取所属柜号
-     * @param $devid
-     * @param $stunoo
-     * @param $phone
+     * @param $devid 设备编号
+     * @param $stunoo 学号
+     * @param $phone 亲情号
      * @param $server
      * @param $fd
      * @param $redis
@@ -506,7 +555,188 @@ class TcpServer implements OnReceiveInterface
 
     }
 
+    /**
+     * 用亲情号和学生信息获取所属柜号
+     * @param $devid 设备编号
+     * @param $grade 年级
+     * @param $class 班级
+     * @param $name 姓名
+     * @param $phone 亲情号
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getqsStunooAbinet($devid,$grade,$class,$name,$phone,$server,$fd,$redis,$db){
+        $stunoo = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
+        if (!$stunoo){
+            $stunoo = $db->fetch('SELECT stunoo FROM `student`WHERE stuname = ?;', [$name]);
+            if ($stunoo){
+                $server->send($fd, json_decode(['func' => '15','Asw' => '学生信息无效']));
+                return;
+            }
+        }
 
+        $student_abinet = $redis->get($stunoo['stunoo']);
+        if ($student_abinet){
+            $student_abinet = json_decode($student_abinet,true);
+            $abinet = implode('-',$student_abinet['student_abinet']);
+            $server->send($fd, json_decode(['func' => '15','list' => $abinet]));
+        }else{
+            $server->send($fd, json_decode(['func' => '15','Asw' => 'null']));
+        }
+    }
 
+    /**
+     * 服务器通知中转柜显示使用柜子的学生列表
+     * @param $devid 设备编号
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getzzStunooAbinet($devid,$server,$fd,$redis,$db){
+        $free_abinet = $redis->get($devid);
+        $stuname = [];
+        if ($free_abinet){
+            $free_abinet = json_decode($free_abinet,true);
+            foreach ($free_abinet as $k => $v){
+                if ($v['stunoo']){
+                    $stunoo = $db->fetch('SELECT stuname FROM `student`WHERE stunoo = ?;', [$v['stunoo']]);
+                    $stuname[] = $stunoo['stuname'];
+                }
+            }
+        }
+        $count = count($stuname);
+        $server->send($fd, json_decode(['func' => '16','count' => $count,'page' => '','stu' => implode('-',$stuname)]));
+    }
+
+    /**
+     *用亲情号和学号挂失所属卡
+     * @param $devid 设备编号
+     * @param $stuno 学号
+     * @param $phone 亲情号
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getReportCard($devid,$stuno,$phone,$server,$fd,$redis,$db){
+        $qq_tel = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
+        if (!$qq_tel){
+            $server->send($fd, json_decode(['func' => '27','Asw' => '亲情号无效']));
+        }
+        $student = $db->fetch('SELECT epcid FROM `student`WHERE stunoo = ?;', [$qq_tel['stunoo']]);
+        if (!$student){
+            $server->send($fd, json_decode(['func' => '27','Asw' => '学号无效']));
+        }
+        $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE epc = ?;', [$student['epcid']]);
+        if (!$card){
+            $server->send($fd, json_decode(['func' => '27','Asw' => '卡片无效']));
+        }
+        if ($card['is_normal'] == 1){
+            $server->send($fd, json_decode(['func' => '27','Asw' => '卡片已挂失']));
+        }
+
+        $is_update = $db->execute('update kaku set is_normal = ? WHERE epc = ?;', [1,$student['epcid']]);
+        if ($is_update){
+            $server->send($fd, json_decode(['func' => '27','Asw' => '挂失成功']));
+        }else{
+            $server->send($fd, json_decode(['func' => '27','Asw' => '挂失失败']));
+        }
+    }
+
+    /**
+     * @param $devid
+     * @param $grade 年级
+     * @param $class 班级
+     * @param $name 姓名
+     * @param $phone 亲情号
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getStudentReportCard($devid,$grade,$class,$name,$phone,$server,$fd,$redis,$db){
+        $qq_tel = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
+        if ($qq_tel){
+            $stunoo = $qq_tel['stunoo'];
+        }else{
+            $student = $db->fetch('SELECT stunoo FROM `student`WHERE name = ?;', [$name]);
+           if ($student){
+               $stunoo = $student['stunoo'];
+           }else{
+               $server->send($fd, json_decode(['func' => '28','Asw' => '学生信息无效']));
+           }
+        }
+        $student = $db->fetch('SELECT epcid FROM `student`WHERE stunoo = ?;', [$stunoo]);
+        if (!$student){
+            $server->send($fd, json_decode(['func' => '28','Asw' => '学号无效']));
+        }
+        $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE epc = ?;', [$student['epcid']]);
+        if (!$card){
+            $server->send($fd, json_decode(['func' => '28','Asw' => '卡片无效']));
+        }
+        if ($card['is_normal'] == 1){
+            $server->send($fd, json_decode(['func' => '28','Asw' => '卡片已挂失']));
+        }
+
+        $is_update = $db->execute('update kaku set is_normal = ? WHERE epc = ?;', [1,$student['epcid']]);
+        if ($is_update){
+            $server->send($fd, json_decode(['func' => '28','Asw' => '挂失成功']));
+        }else{
+            $server->send($fd, json_decode(['func' => '28','Asw' => '挂失失败']));
+        }
+
+    }
+
+    /**
+     * 解挂卡号
+     * @param $devid
+     * @param $no 卡号
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getOpenReportCard($devid,$no,$server,$fd,$redis,$db){
+        $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE tel_id = ?;', [$no]);
+        if (!$card){
+            $server->send($fd, json_decode(['func' => '19','Asw' => '卡片无效']));
+        }
+        if ($card['is_normal'] == 0){
+            $server->send($fd, json_decode(['func' => '19','Asw' => '卡片正常,无需挂失']));
+        }
+
+        $is_update = $db->execute('update kaku set is_normal = ? WHERE tel_id = ?;', [0,$no]);
+        if ($is_update){
+            $server->send($fd, json_decode(['func' => '19','Asw' => 'ok']));
+        }else{
+            $server->send($fd, json_decode(['func' => '19','Asw' => '解挂失败']));
+        }
+    }
+
+    /**
+     * @param $devid 设备id
+     * @param $no 管理卡号
+     * @param $key 读卡密码
+     * @param $mode 柜子类型1中转2寄存
+     * @param $server
+     * @param $fd
+     * @param $redis
+     * @param $db
+     */
+    public function getCabinetSetting($devid,$no,$key,$mode,$server,$fd,$redis,$db){
+        $setting = $db->fetch('SELECT * FROM `cabinet_setting_msg`WHERE devid = ?;', [$devid]);
+        if ($setting){
+            $server->send($fd, json_decode(['func' => '20','Asw' => '信息已存在']));
+        }
+        $id = $db->insert('Insert INTO `cabinet_setting_msg` SET devid = ?,no = ?,key = ?,mode = ?;', [$devid, $no,$key,$mode]);
+        if ($id){
+            $server->send($fd, json_decode(['func' => '20','Asw' => 'ok']));
+        }else{
+            $server->send($fd, json_decode(['func' => '20','Asw' => '设置失败']));
+        }
+    }
 
 }
