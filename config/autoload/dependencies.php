@@ -11,4 +11,6 @@ declare(strict_types=1);
  */
 return [
     App\JsonRpc\CalculatorServiceInterface::class => App\JsonRpc\CalculatorServiceConsumer::class,
+
+    'Cabinettcp' => App\Controller\CabinetTcpServer::class,
 ];

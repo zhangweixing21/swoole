@@ -44,17 +44,19 @@ return [
             ],
         ],
         [
-            'name' => 'tcp',
+            'name' => 'cabinettcp',
             'type' => Server::SERVER_BASE,
             'host' => '0.0.0.0',
             'port' => 45106,
             'sock_type' => SWOOLE_SOCK_TCP,
             'callbacks' => [
-                Event::ON_RECEIVE => [App\Controller\TcpServer::class, 'onReceive'],
+                Event::ON_RECEIVE => ['Cabinettcp', 'onReceive'],
+                Event::ON_CLOSE => ['Cabinettcp', 'onClose'],
+                Event::ON_CONNECT => ['Cabinettcp', 'onConnect'],
             ],
             'settings' => [
                 // 按需配置
-                'open_eof_split' => true, // 启用 EOF 自动分包
+                'open_eof_split' => false, // 启用 EOF 自动分包
                 'package_eof' => "\r\n", // 设置 EOF 字符串
                 'heartbeat_check_interval' => 600,//秒
                 'heartbeat_idle_time' => 1500,
