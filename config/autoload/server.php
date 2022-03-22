@@ -51,8 +51,6 @@ return [
             'sock_type' => SWOOLE_SOCK_TCP,
             'callbacks' => [
                 Event::ON_RECEIVE => ['Cabinettcp', 'onReceive'],
-                Event::ON_CLOSE => ['Cabinettcp', 'onClose'],
-                Event::ON_CONNECT => ['Cabinettcp', 'onConnect'],
             ],
             'settings' => [
                 // 按需配置
@@ -89,7 +87,7 @@ return [
 //        ],
     ],
     'settings' => [
-        'daemonize' => false, //后台作为守护进程
+//        'daemonize' => false, //后台作为守护进程
         Constant::OPTION_ENABLE_COROUTINE => true,
         Constant::OPTION_WORKER_NUM => swoole_cpu_num(),
         Constant::OPTION_PID_FILE => BASE_PATH . '/runtime/hyperf.pid',

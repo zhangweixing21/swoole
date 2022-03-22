@@ -77,13 +77,13 @@ class CabinetTcpServer implements OnReceiveInterface
                 $devid = $msg['devid']; //设备id
                 $password = $msg['pass'];
                 $result = $this->getCabinet($devid, $password, $db);
-                $result_msg['func'] = '13';
+                $result_msg['func'] = '1';
                 if ($result) {
                     $result_msg['Asw'] = 'ok';
                 } else {
-//                $result_msg['Asw'] = 'error';
-                    $result_msg['id'] = '1';
-                    $result_msg['No'] = '3927776756';
+                    $result_msg['Asw'] = 'error';
+//                    $result_msg['id'] = '1';
+//                    $result_msg['No'] = '3927776756';
 //                    $result_msg['No'] = 'zhxy000011';
 //                $result_msg['grade'] = '10';
 //                $result_msg['class'] = '6771';
@@ -239,22 +239,25 @@ class CabinetTcpServer implements OnReceiveInterface
                 $class = $msg['class'];   //班级
                 $name = $msg['name'];   //姓名
                 $phone = $msg['phone'];   //亲情号
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getqsStunooAbinet($devid, $grade, $class, $name, $phone, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getqsStunooAbinet($devid['devid'], $grade, $class, $name, $phone, $server, $fd, $redis, $db,$seq_no);
                 return;
             }
             //服务器通知中转柜显示使用柜子的学生列表，走马灯高亮显示
             if ($func == '16') {
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getzzStunooAbinet($devid, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getzzStunooAbinet($devid['devid'], $server, $fd, $redis, $db,$seq_no);
                 return;
             }
             //用亲情号和学号挂失所属卡
             if ($func == '17') {
                 $stuno = $msg['stuno'];
                 $phone = $msg['phone'];
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getReportCard($devid, $stuno, $phone, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getReportCard($devid['devid'], $stuno, $phone, $server, $fd, $redis, $db,$seq_no);
                 return;
             }
             //用亲情号和学生信息挂失所属卡
@@ -263,15 +266,17 @@ class CabinetTcpServer implements OnReceiveInterface
                 $class = $msg['class'];
                 $name = $msg['name'];
                 $phone = $msg['phone'];
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getStudentReportCard($devid, $grade, $class, $name, $phone, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getStudentReportCard($devid['devid'], $grade, $class, $name, $phone, $server, $fd, $redis, $db,$seq_no);
                 return;
             }
             //解挂卡号
             if ($func == '19') {
                 $no = $msg['No'];
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getOpenReportCard($devid, $no, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getOpenReportCard($devid['devid'], $no, $server, $fd, $redis, $db,$seq_no);
                 return;
             }
             //管理卡设置柜子信息
@@ -279,8 +284,9 @@ class CabinetTcpServer implements OnReceiveInterface
                 $no = $msg['No'];
                 $key = $msg['key'];
                 $mode = $msg['mode'];
-                $devid = $this->getDevid($server, $fd, $redis);
-                $this->getCabinetSetting($devid, $no, $key, $mode, $server, $fd, $redis, $db);
+                $devid_fd = $this->getDevid($server, $fd, $redis);
+                $devid = json_decode($devid_fd, true);
+                $this->getCabinetSetting($devid['devid'], $no, $key, $mode, $server, $fd, $redis, $db,$seq_no);
                 return;
             }
         }
@@ -318,6 +324,86 @@ class CabinetTcpServer implements OnReceiveInterface
 
         $pack_str = implode('', $this->mbStrSplit(strtoupper($new_data . $crc_key), 2));
         return pack("H*", $pack_str);
+    }
+
+    /**
+     * 数组转成UTF-8编码json字符串
+     * @param $array
+     * @return string
+     */
+    public function dataJSON($array)
+    {
+
+        $this->encodeOperations($array, 'urlencode', true);
+
+        $json = json_encode($array);
+
+        return urldecode($json);
+
+    }
+
+    /**************************************************************
+     *
+     * 使用特定function对数组中所有元素做处理
+     * @param string &$array 要处理的字符串
+     * @param string $tocode 编码后
+     * @param string $oldcode 编码前
+     * @param string $function 要执行的函数
+     * @return boolean $apply_to_keys_also 是否也应用到key上
+     * @return array $array 是否也应用到key上
+     * @access public
+     *
+     *************************************************************/
+
+    public function encodeOperations(&$array, $function, $tocode = false, $oldcode = false, $apply_to_keys_also = false)
+
+    {
+
+        foreach ($array as $key => $value) {
+
+            if (is_array($value)) {
+
+                $this->encodeOperations($array[$key], $function, $apply_to_keys_also);
+
+            } else {
+
+                if ($tocode && $oldcode) {
+
+                    if (function_exists(mb_convert_encoding)) {
+
+                        $value = mb_convert_encoding($value, $tocode, $oldcode);
+
+                    } else {
+
+                        return "error";
+
+                    }
+
+                }
+
+                $array[$key] = $function((string)$value);
+
+            }
+
+
+            if ($apply_to_keys_also && is_string($key)) {
+
+                $new_key = $function($key);
+
+                if ($new_key != $key) {
+
+                    $array[$new_key] = $array[$key];
+
+                    unset($array[$key]);
+
+                }
+
+            }
+
+        }
+
+        return $array;
+
     }
 
     /**
@@ -430,7 +516,7 @@ class CabinetTcpServer implements OnReceiveInterface
                     if ($agency_list[$k]['is_free'] == 2) {
                         $msg = ['func' => '4', 'Asw' => '柜子已上锁,无需重复操作'];
                         var_dump($msg);
-                        $bt_16_str = $this->getSendData(json_encode($msg), $seq_no);
+                        $bt_16_str = $this->getSendData($this->dataJSON($msg), $seq_no);
                         $server->send($fd, $bt_16_str);
                         break;
                     } else {
@@ -463,7 +549,7 @@ class CabinetTcpServer implements OnReceiveInterface
         if (!$code) {
             $msg = ['func' => '6', 'Asw' => '寄存码过期'];
             var_dump($msg);
-            $bt_16_str = $this->getSendData(json_encode($msg), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON($msg), $seq_no);
             $server->send($fd, $bt_16_str);
             return;
         }
@@ -477,7 +563,7 @@ class CabinetTcpServer implements OnReceiveInterface
                     //被占用
                     $msg = ['func' => '6', 'Asw' => '柜子被占用'];
                     var_dump($msg);
-                    $bt_16_str = $this->getSendData(json_encode($msg), $seq_no);
+                    $bt_16_str = $this->getSendData($this->dataJSON($msg), $seq_no);
                     $server->send($fd, $bt_16_str);
 
                 } else {
@@ -539,7 +625,8 @@ class CabinetTcpServer implements OnReceiveInterface
 //            $name = implode('-',$name_arr);
 
             var_dump($grade);
-            $bt_16_str = $this->getSendData(json_encode(['func' => '8', 'grade' => $grade]), $seq_no);
+
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '8', 'grade' => $grade]), $seq_no);
             $server->send($fd, $bt_16_str);
         } else {
             $bt_16_str = $this->getSendData(json_encode(['func' => '8', 'Asw' => 'null']), $seq_no);
@@ -570,7 +657,7 @@ class CabinetTcpServer implements OnReceiveInterface
 //                $name_arr = array_column($class,'name');
 //                $name = implode('-',$name_arr);
                 var_dump($class);
-                $bt_16_str = $this->getSendData(json_encode(['func' => '9', 'grade' => $class]), $seq_no);
+                $bt_16_str = $this->getSendData($this->dataJSON(['func' => '9', 'grade' => $class]), $seq_no);
                 $server->send($fd, $bt_16_str);
             } else {
                 $bt_16_str = $this->getSendData(json_encode(['func' => '9', 'Asw' => 'null']), $seq_no);
@@ -604,7 +691,7 @@ class CabinetTcpServer implements OnReceiveInterface
             if ($student) {
                 $count = $db->fetch("SELECT count(1) as count FROM `student` where class_id = ?;", [$class]);
                 var_dump($count);
-                $bt_16_str = $this->getSendData(json_encode(['func' => '10', 'count' => $count['count'], 'page' => '', 'limit' => $student]), $seq_no);
+                $bt_16_str = $this->getSendData($this->dataJSON(['func' => '10', 'count' => $count['count'], 'page' => '', 'limit' => $student]), $seq_no);
                 $server->send($fd, $bt_16_str);
             } else {
                 $bt_16_str = $this->getSendData(json_encode(['func' => '10', 'Asw' => 'null']), $seq_no);
@@ -633,7 +720,7 @@ class CabinetTcpServer implements OnReceiveInterface
         if ($free_abinet) {
             $free_abinet = json_decode($free_abinet['agency_list'], true);
             if (!$free_abinet) {
-                $bt_16_str = $this->getSendData(json_encode(['func' => '11', 'Asw' => '没有空闲柜子']), $seq_no);
+                $bt_16_str = $this->getSendData($this->dataJSON(['func' => '11', 'Asw' => '没有空闲柜子']), $seq_no);
                 var_dump(['func' => '11', 'Asw' => '没有空闲柜子']);
                 $server->send($fd, $bt_16_str);
                 return;
@@ -642,7 +729,7 @@ class CabinetTcpServer implements OnReceiveInterface
                 //2 被人占用 1空闲
                 if ($k == $id) {
                     if ($v['is_free'] == 2) {
-                        $bt_16_str = $this->getSendData(json_encode(['func' => '11', 'Asw' => '柜子被占用']), $seq_no);
+                        $bt_16_str = $this->getSendData($this->dataJSON(['func' => '11', 'Asw' => '柜子被占用']), $seq_no);
                         var_dump(['func' => '11', 'Asw' => '柜子被占用']);
                         $server->send($fd, $bt_16_str);
                         break;
@@ -686,7 +773,7 @@ class CabinetTcpServer implements OnReceiveInterface
     {
         $ka = $db->fetch('SELECT epc FROM `kaku`WHERE tel_id = ?;', [$id]);
         if (!$ka) {
-            $bt_16_str = $this->getSendData(json_encode(['func' => '12', 'Asw' => '卡片无效']), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '12', 'Asw' => '卡片无效']), $seq_no);
             $server->send($fd, $bt_16_str);
             return;
         }
@@ -705,7 +792,7 @@ class CabinetTcpServer implements OnReceiveInterface
                 $server->send($fd, $bt_16_str);
             }
         } else {
-            $bt_16_str = $this->getSendData(json_encode(['func' => '12', 'Asw' => '学生不存在']), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '12', 'Asw' => '学生不存在']), $seq_no);
             $server->send($fd, $bt_16_str);
         }
     }
@@ -724,13 +811,13 @@ class CabinetTcpServer implements OnReceiveInterface
     {
         $ka = $db->fetch('SELECT epc FROM `kaku`WHERE tel_id = ?;', [$no]);
         if (!$ka) {
-            $bt_16_str = $this->getSendData(json_encode(['func' => '13', 'Asw' => '卡号无效']), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '13', 'Asw' => '卡号无效']), $seq_no);
             $server->send($fd, $bt_16_str);
         }
 
         $student = $db->fetch('SELECT stunoo FROM `student`WHERE epcid = ?;', [$ka['epc']]);
         if (!$student) {
-            $bt_16_str = $this->getSendData(json_encode(['func' => '13', 'Asw' => '学生无效']), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '13', 'Asw' => '学生无效']), $seq_no);
             $server->send($fd, $bt_16_str);
         }
         var_dump($devid);
@@ -788,7 +875,7 @@ class CabinetTcpServer implements OnReceiveInterface
     {
         $is_bind = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
         if (!$is_bind) {
-            $bt_16_str = $this->getSendData(json_decode(['func' => '14', 'Asw' => '亲情号无效']), $seq_no);
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '14', 'Asw' => '亲情号无效']), $seq_no);
             $server->send($fd, $bt_16_str);
         }
 
@@ -821,18 +908,19 @@ class CabinetTcpServer implements OnReceiveInterface
         if (!$stunoo) {
             $stunoo = $db->fetch('SELECT stunoo FROM `student`WHERE stuname = ?;', [$name]);
             if ($stunoo) {
-                $server->send($fd, json_decode(['func' => '15', 'Asw' => '学生信息无效']));
+                $bt_16_str = $this->getSendData($this->dataJSON(['func' => '15', 'Asw' => '学生信息无效']), $seq_no);
+                $server->send($fd, $bt_16_str);
                 return;
             }
         }
 
-        $student_abinet = $redis->get($stunoo['stunoo']);
-        if ($student_abinet) {
-            $student_abinet = json_decode($student_abinet, true);
-            $abinet = implode('-', $student_abinet['student_abinet']);
-            $server->send($fd, json_decode(['func' => '15', 'list' => $abinet]));
+        $student_abinet = $db->fetch('SELECT * FROM `agency_student_list`WHERE stunoo = ?;', [$stunoo['stunoo']]);
+        if ($student_abinet && $student_abinet['agency_list']) {
+            $bt_16_str = $this->getSendData(json_decode(['func' => '15', 'list' => $student_abinet['agency_list']]), $seq_no);
+            $server->send($fd, $bt_16_str);
         } else {
-            $server->send($fd, json_decode(['func' => '15', 'Asw' => 'null']));
+            $bt_16_str = $this->getSendData(json_decode(['func' => '15', 'Asw' => 'null']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
     }
 
@@ -844,13 +932,12 @@ class CabinetTcpServer implements OnReceiveInterface
      * @param $redis
      * @param $db
      */
-    public function getzzStunooAbinet($devid, $server, $fd, $redis, $db)
+    public function getzzStunooAbinet($devid, $server, $fd, $redis, $db,$seq_no)
     {
-        $free_abinet = $redis->get($devid);
+        $student_abinet = $db->fetch('SELECT stunoo FROM `agency_student_list`WHERE devid = ?;', [$devid]);
         $stuname = [];
-        if ($free_abinet) {
-            $free_abinet = json_decode($free_abinet, true);
-            foreach ($free_abinet as $k => $v) {
+        if ($student_abinet) {
+            foreach ($student_abinet as $k => $v) {
                 if ($v['stunoo']) {
                     $stunoo = $db->fetch('SELECT stuname FROM `student`WHERE stunoo = ?;', [$v['stunoo']]);
                     $stuname[] = $stunoo['stuname'];
@@ -858,7 +945,8 @@ class CabinetTcpServer implements OnReceiveInterface
             }
         }
         $count = count($stuname);
-        $server->send($fd, json_decode(['func' => '16', 'count' => $count, 'page' => '', 'stu' => implode('-', $stuname)]));
+        $bt_16_str = $this->getSendData($this->dataJSON(['func' => '16', 'count' => $count, 'page' => '', 'stu' => implode('-', $stuname)]), $seq_no);
+        $server->send($fd, $bt_16_str);
     }
 
     /**
@@ -871,29 +959,35 @@ class CabinetTcpServer implements OnReceiveInterface
      * @param $redis
      * @param $db
      */
-    public function getReportCard($devid, $stuno, $phone, $server, $fd, $redis, $db)
+    public function getReportCard($devid, $stuno, $phone, $server, $fd, $redis, $db,$seq_no)
     {
         $qq_tel = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
         if (!$qq_tel) {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '亲情号无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '亲情号无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         $student = $db->fetch('SELECT epcid FROM `student`WHERE stunoo = ?;', [$qq_tel['stunoo']]);
         if (!$student) {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '学号无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '学号无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE epc = ?;', [$student['epcid']]);
         if (!$card) {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '卡片无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '卡片无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         if ($card['is_normal'] == 1) {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '卡片已挂失']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '卡片已挂失']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
 
         $is_update = $db->execute('update kaku set is_normal = ? WHERE epc = ?;', [1, $student['epcid']]);
         if ($is_update) {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '挂失成功']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '挂失成功']), $seq_no);
+            $server->send($fd, $bt_16_str);
         } else {
-            $server->send($fd, json_decode(['func' => '27', 'Asw' => '挂失失败']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '27', 'Asw' => '挂失失败']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
     }
 
@@ -908,7 +1002,7 @@ class CabinetTcpServer implements OnReceiveInterface
      * @param $redis
      * @param $db
      */
-    public function getStudentReportCard($devid, $grade, $class, $name, $phone, $server, $fd, $redis, $db)
+    public function getStudentReportCard($devid, $grade, $class, $name, $phone, $server, $fd, $redis, $db,$seq_no)
     {
         $qq_tel = $db->fetch('SELECT stunoo FROM `qq_tel`WHERE tel = ?;', [$phone]);
         if ($qq_tel) {
@@ -918,26 +1012,32 @@ class CabinetTcpServer implements OnReceiveInterface
             if ($student) {
                 $stunoo = $student['stunoo'];
             } else {
-                $server->send($fd, json_decode(['func' => '28', 'Asw' => '学生信息无效']));
+                $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '学生信息无效']), $seq_no);
+                $server->send($fd, $bt_16_str);
             }
         }
         $student = $db->fetch('SELECT epcid FROM `student`WHERE stunoo = ?;', [$stunoo]);
         if (!$student) {
-            $server->send($fd, json_decode(['func' => '28', 'Asw' => '学号无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '学号无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE epc = ?;', [$student['epcid']]);
         if (!$card) {
-            $server->send($fd, json_decode(['func' => '28', 'Asw' => '卡片无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '卡片无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         if ($card['is_normal'] == 1) {
-            $server->send($fd, json_decode(['func' => '28', 'Asw' => '卡片已挂失']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '卡片已挂失']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
 
         $is_update = $db->execute('update kaku set is_normal = ? WHERE epc = ?;', [1, $student['epcid']]);
         if ($is_update) {
-            $server->send($fd, json_decode(['func' => '28', 'Asw' => '挂失成功']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '挂失成功']), $seq_no);
+            $server->send($fd, $bt_16_str);
         } else {
-            $server->send($fd, json_decode(['func' => '28', 'Asw' => '挂失失败']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '28', 'Asw' => '挂失失败']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
 
     }
@@ -951,21 +1051,25 @@ class CabinetTcpServer implements OnReceiveInterface
      * @param $redis
      * @param $db
      */
-    public function getOpenReportCard($devid, $no, $server, $fd, $redis, $db)
+    public function getOpenReportCard($devid, $no, $server, $fd, $redis, $db,$seq_no)
     {
         $card = $db->fetch('SELECT is_normal FROM `kaku`WHERE tel_id = ?;', [$no]);
         if (!$card) {
-            $server->send($fd, json_decode(['func' => '19', 'Asw' => '卡片无效']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '19', 'Asw' => '卡片无效']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         if ($card['is_normal'] == 0) {
-            $server->send($fd, json_decode(['func' => '19', 'Asw' => '卡片正常,无需挂失']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '19', 'Asw' => '卡片正常,无需挂失']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
 
         $is_update = $db->execute('update kaku set is_normal = ? WHERE tel_id = ?;', [0, $no]);
         if ($is_update) {
-            $server->send($fd, json_decode(['func' => '19', 'Asw' => 'ok']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '19', 'Asw' => 'ok']), $seq_no);
+            $server->send($fd, $bt_16_str);
         } else {
-            $server->send($fd, json_decode(['func' => '19', 'Asw' => '解挂失败']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '19', 'Asw' => '解挂失败']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
     }
 
@@ -979,17 +1083,20 @@ class CabinetTcpServer implements OnReceiveInterface
      * @param $redis
      * @param $db
      */
-    public function getCabinetSetting($devid, $no, $key, $mode, $server, $fd, $redis, $db)
+    public function getCabinetSetting($devid, $no, $key, $mode, $server, $fd, $redis, $db,$seq_no)
     {
         $setting = $db->fetch('SELECT * FROM `cabinet_setting_msg`WHERE devid = ?;', [$devid]);
         if ($setting) {
-            $server->send($fd, json_decode(['func' => '20', 'Asw' => '信息已存在']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '20', 'Asw' => '信息已存在']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
         $id = $db->insert('Insert INTO `cabinet_setting_msg` SET devid = ?,no = ?,key = ?,mode = ?;', [$devid, $no, $key, $mode]);
         if ($id) {
-            $server->send($fd, json_decode(['func' => '20', 'Asw' => 'ok']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '20', 'Asw' => 'ok']), $seq_no);
+            $server->send($fd, $bt_16_str);
         } else {
-            $server->send($fd, json_decode(['func' => '20', 'Asw' => '设置失败']));
+            $bt_16_str = $this->getSendData($this->dataJSON(['func' => '20', 'Asw' => '设置失败']), $seq_no);
+            $server->send($fd, $bt_16_str);
         }
     }
 

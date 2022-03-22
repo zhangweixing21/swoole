@@ -32,7 +32,7 @@ class PushController extends AbstractController
                 $send_data['fd'] = $redis_student['fd'];
 //                var_dump(1);
                 // 主动推送消息
-                $client = new \Swoole\Client(SWOOLE_SOCK_TCP);
+                $client = new \Swoole\Client(SWOOLE_SOCK_TCP | SWOOLE_KEEP);
                 $client->connect('127.0.0.1', 45104);
                 $client->send(json_encode($send_data) . "\r\n");
                 $ret = $client->recv(); // recv:Hello World.
